@@ -1,27 +1,41 @@
 package storage
 
+import "sync"
+
 type Storage struct {
 	data map[string]string
+	mu   sync.RWMutex
 }
 
-func NewStorage() *Storage{
+// initializing
+func NewStorage() *Storage {
 	return &Storage{
-		data:make(map[string]string),
+		data: make(map[string]string),
 	}
 }
 
-//set
-func (s*Storage)Set(key string , val string){
-	s.data[key]=val
+// set key value pair.
+func (s *Storage) Set(key string, val string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.data[key] = val
 }
-// get
-func (s*Storage)Get(key string) (string, bool){
+
+//get key value pair.
+
+func (s *Storage) Get(key string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	val, exists := s.data[key]
 	return val, exists
 }
-// delete
-func (s*Storage)Delete(key string){
+
+// delete particulr key value pair.
+func (s *Storage) Delete(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	delete(s.data, key)
 }
-
-
