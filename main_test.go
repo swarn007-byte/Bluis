@@ -11,8 +11,6 @@ import (
 	"bluis/internals/storage"
 )
 
-// --- handler unit tests ---
-
 func TestHandleCommandPing(t *testing.T) {
 	store := storage.NewStorage()
 
@@ -97,9 +95,6 @@ func TestHandleCommandErrors(t *testing.T) {
 	}
 }
 
-// --- TCP server tests ---
-
-// startTestServer runs the real accept loop on an ephemeral port.
 func startTestServer(t *testing.T) (string, *storage.Storage) {
 	t.Helper()
 
@@ -155,7 +150,6 @@ func TestTCMultipleCommandsOneConnection(t *testing.T) {
 	addr, _ := startTestServer(t)
 	conn := dial(t, addr)
 
-	// Every command of the session goes over the same connection.
 	send(t, conn, "*1\r\n$4\r\nPING\r\n")
 	expect(t, conn, "+PONG\r\n")
 
@@ -165,18 +159,15 @@ func TestTCMultipleCommandsOneConnection(t *testing.T) {
 	send(t, conn, "*2\r\n$3\r\nGET\r\n$4\r\nname\r\n")
 	expect(t, conn, "$5\r\nSwarn\r\n")
 
-	// Value with a space survives the round trip.
 	send(t, conn, "*3\r\n$3\r\nSET\r\n$5\r\nabout\r\n$11\r\nhello world\r\n")
 	expect(t, conn, "+OK\r\n")
 
 	send(t, conn, "*2\r\n$3\r\nGET\r\n$5\r\nabout\r\n")
 	expect(t, conn, "$11\r\nhello world\r\n")
 
-	// Missing key.
 	send(t, conn, "*2\r\n$3\r\nGET\r\n$4\r\nnone\r\n")
 	expect(t, conn, "$-1\r\n")
 
-	// DEL reports how many keys it removed.
 	send(t, conn, "*2\r\n$3\r\nDEL\r\n$4\r\nname\r\n")
 	expect(t, conn, ":1\r\n")
 
@@ -190,7 +181,6 @@ func TestTCPMalformedRESP(t *testing.T) {
 
 	send(t, conn, "hello\r\n")
 
-	// Read until the server closes the connection after the error reply.
 	reply, err := io.ReadAll(conn)
 	if err != nil {
 		t.Fatalf("read error reply: %v", err)
@@ -220,8 +210,6 @@ func TestTCPConcurrentClients(t *testing.T) {
 	}
 }
 
-// concurrentClient exercises SET/GET/DEL on its own keys (fully asserted)
-// and hammers one shared key (contention on the RWMutex) over one connection.
 func concurrentClient(addr string, id, iterations int) error {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -259,7 +247,6 @@ func concurrentClient(addr string, id, iterations int) error {
 			{fmt.Sprintf("*2\r\n$3\r\nGET\r\n$%d\r\n%s\r\n", len(key), key), fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)},
 			{fmt.Sprintf("*2\r\n$3\r\nDEL\r\n$%d\r\n%s\r\n", len(key), key), ":1\r\n"},
 			{fmt.Sprintf("*2\r\n$3\r\nGET\r\n$%d\r\n%s\r\n", len(key), key), "$-1\r\n"},
-			// Shared key: value is nondeterministic, only the reply shape is.
 			{"*3\r\n$3\r\nSET\r\n$6\r\nshared\r\n$7\r\ncontend\r\n", "+OK\r\n"},
 		}
 

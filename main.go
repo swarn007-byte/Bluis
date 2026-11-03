@@ -26,7 +26,6 @@ func main() {
 	serve(listen, store)
 }
 
-// serve accepts connections and handles each one in its own goroutine.
 func serve(listen net.Listener, store *storage.Storage) {
 	for {
 		conn, err := listen.Accept()
@@ -54,11 +53,9 @@ func handleClient(conn net.Conn, store *storage.Storage) {
 		if err != nil {
 			var protoErr *resp.ProtocolError
 			if errors.As(err, &protoErr) {
-				// Malformed RESP: tell the client, then drop the connection.
 				fmt.Println("Protocol error:", protoErr)
 				conn.Write([]byte(resp.Error("ERR " + protoErr.Error())))
 			}
-			// Clean disconnect (io.EOF) or network error: close either way.
 			return
 		}
 
@@ -72,7 +69,6 @@ func handleClient(conn net.Conn, store *storage.Storage) {
 	}
 }
 
-// handleCommand executes one decoded command and returns its RESP-encoded reply.
 func handleCommand(args []string, store *storage.Storage) string {
 	if len(args) == 0 {
 		return resp.Error("ERR empty command")

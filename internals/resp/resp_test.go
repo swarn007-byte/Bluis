@@ -28,8 +28,6 @@ func TestReadCommandValid(t *testing.T) {
 }
 
 func TestReadCommandValueWithSpaces(t *testing.T) {
-	// "my key" is 6 bytes, "hello world" is 11 bytes: lengths are respected
-	// even though the values contain spaces.
 	input := "*3\r\n$3\r\nSET\r\n$6\r\nmy key\r\n$11\r\nhello world\r\n"
 
 	args, err := ReadCommand(bufio.NewReader(strings.NewReader(input)))
@@ -49,8 +47,6 @@ func TestReadCommandValueWithSpaces(t *testing.T) {
 }
 
 func TestReadCommandMultipleFromOneReader(t *testing.T) {
-	// Two commands on one stream: the first read must not consume bytes
-	// belonging to the second command.
 	input := "*1\r\n$4\r\nPING\r\n*2\r\n$3\r\nGET\r\n$4\r\nname\r\n"
 	reader := bufio.NewReader(strings.NewReader(input))
 
@@ -120,7 +116,7 @@ func TestReadCommandMalformed(t *testing.T) {
 				t.Fatal("expected an error, got nil")
 			}
 			if errors.Is(err, io.EOF) {
-				return // truncated stream is rejected too, just as io.EOF
+				return
 			}
 			var protoErr *ProtocolError
 			if !errors.As(err, &protoErr) {
