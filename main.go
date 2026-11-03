@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 
+	"bluis/internals/resp"
 	"bluis/internals/storage"
 )
 
@@ -21,35 +23,23 @@ func main() {
 
 	fmt.Println("BLUIS server is running...")
 
+	serve(listen, store)
+}
+
+// serve accepts connections and handles each one in its own goroutine.
+func serve(listen net.Listener, store *storage.Storage) {
 	for {
 		conn, err := listen.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			fmt.Println(err)
 			continue
 		}
 
 		fmt.Println("New client connected!")
 
-		// buffer := make([]byte, 1024)
-
-		// n, err := conn.Read(buffer)
-		// if err != nil {
-		// 	fmt.Println(err)
-		// 	conn.Close()
-		// 	continue
-		// }
-
-		// command := strings.TrimSpace(string(buffer[:n]))
-		// fmt.Println("Received:", command)
-
-		// response :=handleCommand(command, store)
-
-		// _, err = conn.Write([]byte(response + "\n"))
-		// if err != nil {
-		// 	fmt.Println(err)
-		// }
-
-		// conn.Close()
 		go handleClient(conn, store)
 	}
 }
@@ -60,78 +50,87 @@ func handleClient(conn net.Conn, store *storage.Storage) {
 	reader := bufio.NewReader(conn)
 
 	for {
-		command, err := reader.ReadString('\n')
+		args, err := resp.ReadCommand(reader)
 		if err != nil {
-			break
+			var protoErr *resp.ProtocolError
+			if errors.As(err, &protoErr) {
+				// Malformed RESP: tell the client, then drop the connection.
+				fmt.Println("Protocol error:", protoErr)
+				conn.Write([]byte(resp.Error("ERR " + protoErr.Reason)))
+			}
+			// Clean disconnect (io.EOF) or network error: close either way.
+			return
 		}
 
-		command = strings.TrimSpace(command)
+		fmt.Println("Received:", args)
 
-		if command == "" {
-			continue
-		}
+		response := handleCommand(args, store)
 
-		fmt.Println("Received:", command)
-
-		response := handleCommand(command, store)
-
-		_, err = conn.Write([]byte(response + "\n"))
-		if err != nil {
-			break
+		if _, err := conn.Write([]byte(response)); err != nil {
+			return
 		}
 	}
 }
 
-func handleCommand(command string, store *storage.Storage) string {
-	parts := strings.Fields(command)
-
-	if len(parts) == 0 {
-		return "-ERR empty command"
+// handleCommand executes one decoded command and returns its RESP-encoded reply.
+func handleCommand(args []string, store *storage.Storage) string {
+	if len(args) == 0 {
+		return resp.Error("ERR empty command")
 	}
 
-	switch strings.ToUpper(parts[0]) {
+	switch strings.ToUpper(args[0]) {
 	case "PING":
-		return "PONG"
+		if len(args) == 1 {
+			return resp.SimpleString("PONG")
+		}
+		if len(args) == 2 {
+			return resp.BulkString(args[1])
+		}
+		return resp.Error("ERR wrong number of arguments for 'ping' command")
 
 	case "SET":
-		if len(parts) != 3 {
-			return "-ERR wrong number of arguments"
+		if len(args) != 3 {
+			return resp.Error("ERR wrong number of arguments for 'set' command")
 		}
 
-		key := parts[1]
-		value := parts[2]
+		key := args[1]
+		value := args[2]
 
 		store.Set(key, value)
 
-		return "OK"
+		return resp.SimpleString("OK")
+
 	case "GET":
-		if len(parts) != 2 {
-			return "-ERR wrong number of arguments"
+		if len(args) != 2 {
+			return resp.Error("ERR wrong number of arguments for 'get' command")
 		}
 
-		key := parts[1]
+		key := args[1]
 
 		value, exists := store.Get(key)
 
 		if !exists {
-			return "(nil)"
+			return resp.NullBulkString()
 		}
 
-		return value
+		return resp.BulkString(value)
 
 	case "DEL":
-		if len(parts) != 2 {
-			return "-ERR wrong number of arguments"
+		if len(args) < 2 {
+			return resp.Error("ERR wrong number of arguments for 'del' command")
 		}
 
-		key := parts[1]
+		var deleted int64
+		for _, key := range args[1:] {
+			if store.Delete(key) {
+				deleted++
+			}
+		}
 
-		store.Delete(key)
-
-		return "OK"
+		return resp.Integer(deleted)
 
 	default:
-		return "-ERR unknown command"
+		return resp.Error("ERR unknown command '" + args[0] + "'")
 	}
 
 }
