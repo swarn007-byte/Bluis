@@ -56,7 +56,7 @@ func handleClient(conn net.Conn, store *storage.Storage) {
 			if errors.As(err, &protoErr) {
 				// Malformed RESP: tell the client, then drop the connection.
 				fmt.Println("Protocol error:", protoErr)
-				conn.Write([]byte(resp.Error("ERR " + protoErr.Reason)))
+				conn.Write([]byte(resp.Error("ERR " + protoErr.Error())))
 			}
 			// Clean disconnect (io.EOF) or network error: close either way.
 			return
