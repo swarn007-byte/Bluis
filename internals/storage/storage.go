@@ -33,9 +33,15 @@ func (s *Storage) Get(key string) (string, bool) {
 }
 
 // delete particulr key value pair.
-func (s *Storage) Delete(key string) {
+// reports whether the key existed.
+func (s *Storage) Delete(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if _, exists := s.data[key]; !exists {
+		return false
+	}
+
 	delete(s.data, key)
+	return true
 }
