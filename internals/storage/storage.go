@@ -1,15 +1,20 @@
 package storage
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type Storage struct {
 	data map[string]string
+	expires map[string]time.Time
 	mu   sync.RWMutex
 }
 
 func NewStorage() *Storage {
 	return &Storage{
 		data: make(map[string]string),
+		expires:make(map[string]time.Time),
 	}
 }
 
