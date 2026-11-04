@@ -73,3 +73,25 @@ func (s *Storage) Expire(key string, seconds int) bool {
 	}
 	return false
 }
+func (s *Storage) TTL(key string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, exists := s.data[key]
+	if !exists {
+		return -2
+	}
+
+	expiry, hasExpiry := s.expires[key]
+	if !hasExpiry {
+		return -1
+	}
+
+	if time.Until(expiry) <= 0 {
+		delete(s.data, key)
+		delete(s.expires, key)
+		return -2
+	}
+
+	return int(time.Until(expiry).Seconds())
+}
