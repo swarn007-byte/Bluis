@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -49,9 +50,27 @@ func main() {
 
 	fmt.Println("BLUIS server is running...")
 
+	//for {
+	//	conn, err := listen.Accept()
+	//	if err != nil {
+	//		fmt.Println(err)
+	//		continue
+	//	}
+	//
+	//	fmt.Println("New client connected!")
+	//	go handleClient(conn, store)
+	//}
+
+	serve(listen, store)
+}
+
+func serve(listen net.Listener, store *storage.Storage) {
 	for {
 		conn, err := listen.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			fmt.Println(err)
 			continue
 		}
@@ -71,7 +90,7 @@ func handleClient(conn net.Conn, store *storage.Storage) {
 		if err != nil {
 			if err != io.EOF {
 				fmt.Println("RESP read error:", err)
-				_, _ = conn.Write([]byte(resp.Error(err.Error())))
+				_, _ = conn.Write([]byte(resp.Error("ERR " + err.Error())))
 			}
 			return
 		}
@@ -96,8 +115,11 @@ func handleCommand(args []string, store *storage.Storage) string {
 	switch strings.ToUpper(args[0]) {
 
 	case "PING":
-		if len(args) != 1 {
+		if len(args) > 2 {
 			return resp.Error("ERR wrong number of arguments")
+		}
+		if len(args) == 2 {
+			return resp.BulkString(args[1])
 		}
 		return resp.SimpleString("PONG")
 
