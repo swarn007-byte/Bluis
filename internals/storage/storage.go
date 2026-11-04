@@ -31,11 +31,22 @@ func (s *Storage) Set(key string, val string) {
 }
 
 func (s *Storage) Get(key string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	val, exists := s.data[key]
-	return val, exists
+	if !exists {
+		return "", false
+	}
+
+	expiry, hasExpiry := s.expires[key]
+	if hasExpiry && time.Now().After(expiry) {
+		delete(s.data, key)
+		delete(s.expires, key)
+		return "", false
+	}
+
+	return val, true
 }
 
 func (s *Storage) Delete(key string) bool {
