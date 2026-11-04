@@ -58,8 +58,11 @@ func (s *Storage) Delete(key string) bool {
 	}
 
 	delete(s.data, key)
+	delete(s.expires, key)
+
 	return true
 }
+
 func (s *Storage) Expire(key string, seconds int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
