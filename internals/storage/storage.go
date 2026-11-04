@@ -22,7 +22,12 @@ func (s *Storage) Set(key string, val string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if _,exists:=s.data[key];exists{
+		delete(s.expires, key)  //syntax is delete(map,key)
+	}
+
 	s.data[key] = val
+
 }
 
 func (s *Storage) Get(key string) (string, bool) {
@@ -43,4 +48,14 @@ func (s *Storage) Delete(key string) bool {
 
 	delete(s.data, key)
 	return true
+}
+func (s *Storage) Expire(key string, seconds int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.data[key]; exists {
+		s.expires[key] = time.Now().Add(time.Duration(seconds) * time.Second)
+		return true
+	}
+	return false
 }
