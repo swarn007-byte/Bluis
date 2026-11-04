@@ -95,3 +95,26 @@ func (s *Storage) TTL(key string) int {
 
 	return int(time.Until(expiry).Seconds())
 }
+
+func (s *Storage) StartCleanup(stop <-chan struct{}) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+
+			s.mu.Lock()
+			for key, expiry := range s.expires {
+				if now.After(expiry) {
+					delete(s.data, key)
+					delete(s.expires, key)
+				}
+			}
+			s.mu.Unlock()
+		case <-stop:
+			return
+		}
+	}
+}

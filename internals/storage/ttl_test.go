@@ -43,3 +43,46 @@ func TestTTL(t *testing.T) {
 		t.Error("expected expired key to be deleted")
 	}
 }
+
+func TestCleanupWorker(t *testing.T) {
+	store := NewStorage()
+
+	store.Set("gone", "value")
+	store.Expire("gone", -1)
+
+	store.Set("keep", "value")
+
+	store.Set("future", "value")
+	store.Expire("future", 60)
+
+	stop := make(chan struct{})
+	go store.StartCleanup(stop)
+	defer close(stop)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		store.mu.RLock()
+		_, exists := store.data["gone"]
+		store.mu.RUnlock()
+		if !exists {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	if _, exists := store.data["gone"]; exists {
+		t.Error("expected expired key 'gone' to be removed by cleanup worker")
+	}
+	if _, exists := store.expires["gone"]; exists {
+		t.Error("expected expiry entry of 'gone' to be removed by cleanup worker")
+	}
+	if _, exists := store.data["keep"]; !exists {
+		t.Error("expected key 'keep' without TTL to remain")
+	}
+	if _, exists := store.data["future"]; !exists {
+		t.Error("expected key 'future' with future TTL to remain")
+	}
+}

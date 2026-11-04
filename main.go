@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -30,6 +31,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	cleanupStop := make(chan struct{})
+	go store.StartCleanup(cleanupStop)
+
 	// Shutdown handling
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
@@ -38,6 +42,9 @@ func main() {
 		sig := <-signalChannel
 
 		log.Println("Shutdown signal received:", sig)
+
+		close(cleanupStop)
+
 		log.Println("Saving data...")
 
 		if err := store.SaveToFile("dump.rdb"); err != nil {
@@ -156,6 +163,29 @@ func handleCommand(args []string, store *storage.Storage) string {
 		}
 
 		return resp.Integer(0)
+
+	case "EXPIRE":
+		if len(args) != 3 {
+			return resp.Error("ERR wrong number of arguments")
+		}
+
+		seconds, err := strconv.Atoi(args[2])
+		if err != nil {
+			return resp.Error("ERR value is not an integer or out of range")
+		}
+
+		if store.Expire(args[1], seconds) {
+			return resp.Integer(1)
+		}
+
+		return resp.Integer(0)
+
+	case "TTL":
+		if len(args) != 2 {
+			return resp.Error("ERR wrong number of arguments")
+		}
+
+		return resp.Integer(int64(store.TTL(args[1])))
 
 	default:
 		return resp.Error("ERR unknown command")
